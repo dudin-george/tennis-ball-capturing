@@ -1,9 +1,11 @@
 from __future__ import print_function
+from linecache import getline
 import sys
 import numpy as np
 import pyzed.sl as sl
 import cv2
 import argparse
+import json
 
 zed = sl.Camera()
 
@@ -19,7 +21,7 @@ init.camera_fps = 100
 
 err = zed.open(init)
 
-zed.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, 22)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, 50)
 zed.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, 85)
 zed.set_camera_settings(sl.VIDEO_SETTINGS.GAMMA, 6)
 zed.set_camera_settings(sl.VIDEO_SETTINGS.SHARPNESS, 8)
@@ -31,12 +33,12 @@ zed.set_camera_settings(sl.VIDEO_SETTINGS.HUE, 0)
 
 max_value = 255
 max_value_H = 360//2
-low_H = 54
-low_S = 160
-low_V = 118
-high_H = 81
+low_H = 50
+low_S = 93
+low_V = 149
+high_H = 96
 high_S = 255
-high_V = 155
+high_V = 255
 window_capture_name = 'Video Capture'
 window_detection_name = 'Object Detection'
 low_H_name = 'Low H'
@@ -111,37 +113,58 @@ image_size = zed.get_camera_information().camera_resolution
 
 # Declare your sl.Mat matrices
 image_zed = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
-lalala = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
 
-key = ' '
-while key != 113 :
+
+S_full = image_size.width * image_size.height
+S_ball = 0.001256
+S_0 = 1.838
+dist0 = 0.75
+points = []
+
+
+
+key = ''
+for i in range(500):
+
     err = zed.grab(runtime)
     if err == sl.ERROR_CODE.SUCCESS :
         zed.retrieve_image(image_zed, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
         image_ocv = image_zed.get_data()
+        
 
         hsv_min = np.array((low_H, low_S, low_V), np.uint8)
         hsv_max = np.array((high_H, high_S, high_V), np.uint8)
         hsv = cv2.cvtColor(image_ocv, cv2.COLOR_BGR2HSV )
         thresh = cv2.inRange(hsv, hsv_min, hsv_max)
+        cv2.imshow(window_detection_name, thresh)
+
+        
         
         moments = cv2.moments(thresh, 1)
         dM01 = moments['m01']
         dM10 = moments['m10']
         dArea = moments['m00']
 
-        if dArea > 100:
-            x = int(dM10 / dArea)
-            y = int(dM01 / dArea)
-            cv2.circle(lalala, (x, y), 5, color_yellow, 2)
-            cv2.putText(lalala, "%d-%d" % (x,y), (x+10,y-10), 
+        if dArea > 30:
+            x = int(dM10 / dArea - (image_size.width / 2))
+            y = int(dM01 / dArea - (image_size.height / 2))
+
+
+            cv2.circle(image_ocv, (x+336, y+188), 5, color_yellow, 2)
+            cv2.putText(image_ocv, "%d-%d" % (x,y), (x+346,y+178), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, color_yellow, 2)
 
+            pix_size = (S_ball / dArea) ** 0.5
+            points.append((x * pix_size, y * pix_size, (dist0 * ((S_full * S_ball) / (dArea * S_0)) ** 0.5)))
+            print(points[-1])
+
         cv2.imshow(window_capture_name, image_ocv)
-        cv2.imshow(window_detection_name, thresh)
-        cv2.imshow("hahahah", lalala)
 
+        key = cv2.waitKey(10)
 
+with open("data.json", "w") as file:
+    json.dump(points, file)    
+    
 cv2.destroyAllWindows()
 zed.close()
 
