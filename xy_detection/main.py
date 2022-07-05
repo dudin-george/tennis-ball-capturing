@@ -1,127 +1,149 @@
-
-# USAGE
-# python ball_tracking.py --video ball_tracking_example.mp4
-# python ball_tracking.py
-
-# import the necessary packages
-from collections import deque
-from imutils.video import VideoStream
+from __future__ import print_function
+import sys
 import numpy as np
-import argparse
+import pyzed.sl as sl
 import cv2
-import imutils
-import time
+import argparse
 
-# construct the argument parse and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--video",
-	help="path to the (optional) video file")
-ap.add_argument("-b", "--buffer", type=int, default=64,
-	help="max buffer size")
-args = vars(ap.parse_args())
+zed = sl.Camera()
 
-# define the lower and upper boundaries of the "green"
-# ball in the HSV color space, then initialize the
-# list of tracked points
-greenLower = (29, 86, 6)
-greenUpper = (64, 255, 255)
-pts = deque(maxlen=args["buffer"])
+# Set configuration parameters
+input_type = sl.InputType()
+if len(sys.argv) >= 2 :
+    input_type.set_from_svo_file(sys.argv[1])
+    
 
-# if a video path was not supplied, grab the reference
-# to the webcam
-if not args.get("video", False):
-	vs = VideoStream(0).start()
+init = sl.InitParameters(input_t=input_type)
+init.camera_resolution = sl.RESOLUTION.VGA
+init.camera_fps = 100
 
-# otherwise, grab a reference to the video file
-else:
-	vs = cv2.VideoCapture(args["video"])
+err = zed.open(init)
 
-# allow the camera or video file to warm up
-time.sleep(2.0)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, 22)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, 85)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.GAMMA, 6)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.SHARPNESS, 8)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.SATURATION,5)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.CONTRAST, 8)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.BRIGHTNESS, 2)
+zed.set_camera_settings(sl.VIDEO_SETTINGS.HUE, 0)
 
-# keep looping
-while True:
-	# grab the current frame
-	frame = vs.read()
 
-	# handle the frame from VideoCapture or VideoStream
-	frame = frame[1] if args.get("video", False) else frame
+max_value = 255
+max_value_H = 360//2
+low_H = 54
+low_S = 160
+low_V = 118
+high_H = 81
+high_S = 255
+high_V = 155
+window_capture_name = 'Video Capture'
+window_detection_name = 'Object Detection'
+low_H_name = 'Low H'
+low_S_name = 'Low S'
+low_V_name = 'Low V'
+high_H_name = 'High H'
+high_S_name = 'High S'
+high_V_name = 'High V'
+color_yellow = (0,255,255)
 
-	# if we are viewing a video and we did not grab a frame,
-	# then we have reached the end of the video
-	if frame is None:
-		break
 
-	# resize the frame, blur it, and convert it to the HSV
-	# color space
-	frame = imutils.resize(frame, width=600)
-	blurred = cv2.GaussianBlur(frame, (11, 11), 0)
-	hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+def on_low_H_thresh_trackbar(val):
+    global low_H
+    global high_H
+    low_H = val
+    low_H = min(high_H-1, low_H)
+    cv2.setTrackbarPos(low_H_name, window_detection_name, low_H)
+def on_high_H_thresh_trackbar(val):
+    global low_H
+    global high_H
+    high_H = val
+    high_H = max(high_H, low_H+1)
+    cv2.setTrackbarPos(high_H_name, window_detection_name, high_H)
+def on_low_S_thresh_trackbar(val):
+    global low_S
+    global high_S
+    low_S = val
+    low_S = min(high_S-1, low_S)
+    cv2.setTrackbarPos(low_S_name, window_detection_name, low_S)
+def on_high_S_thresh_trackbar(val):
+    global low_S
+    global high_S
+    high_S = val
+    high_S = max(high_S, low_S+1)
+    cv2.setTrackbarPos(high_S_name, window_detection_name, high_S)
+def on_low_V_thresh_trackbar(val):
+    global low_V
+    global high_V
+    low_V = val
+    low_V = min(high_V-1, low_V)
+    cv2.setTrackbarPos(low_V_name, window_detection_name, low_V)
+def on_high_V_thresh_trackbar(val):
+    global low_V
+    global high_V
+    high_V = val
+    high_V = max(high_V, low_V+1)
+    cv2.setTrackbarPos(high_V_name, window_detection_name, high_V)
 
-	# construct a mask for the color "green", then perform
-	# a series of dilations and erosions to remove any small
-	# blobs left in the mask
-	mask = cv2.inRange(hsv, greenLower, greenUpper)
-	mask = cv2.erode(mask, None, iterations=2)
-	mask = cv2.dilate(mask, None, iterations=2)
+cv2.namedWindow(window_capture_name)
+cv2.namedWindow(window_detection_name)
+cv2.createTrackbar(low_H_name, window_detection_name , low_H, max_value_H, on_low_H_thresh_trackbar)
+cv2.createTrackbar(high_H_name, window_detection_name , high_H, max_value_H, on_high_H_thresh_trackbar)
+cv2.createTrackbar(low_S_name, window_detection_name , low_S, max_value, on_low_S_thresh_trackbar)
+cv2.createTrackbar(high_S_name, window_detection_name , high_S, max_value, on_high_S_thresh_trackbar)
+cv2.createTrackbar(low_V_name, window_detection_name , low_V, max_value, on_low_V_thresh_trackbar)
+cv2.createTrackbar(high_V_name, window_detection_name , high_V, max_value, on_high_V_thresh_trackbar) 
 
-	cv2.imshow("mask", mask)
 
-	# find contours in the mask and initialize the current
-	# (x, y) center of the ball
-	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-		cv2.CHAIN_APPROX_SIMPLE)
-	cnts = imutils.grab_contours(cnts)
-	center = None
+# Open the camera
 
-	# only proceed if at least one contour was found
-	if len(cnts) > 0:
-		# find the largest contour in the mask, then use
-		# it to compute the minimum enclosing circle and
-		# centroid
-		c = max(cnts, key=cv2.contourArea)
-		((x, y), radius) = cv2.minEnclosingCircle(c)
-		M = cv2.moments(c)
-		center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+if err != sl.ERROR_CODE.SUCCESS :
+    print(repr(err))
+    zed.close()
+    exit(1)
 
-		# only proceed if the radius meets a minimum size
-		if radius > 10:
-			# draw the circle and centroid on the frame,
-			# then update the list of tracked points
-			cv2.circle(frame, (int(x), int(y)), int(radius),
-				(0, 255, 255), 2)
-			cv2.circle(frame, center, 5, (0, 0, 255), -1)
+# Set runtime parameters after opening the camera
+runtime = sl.RuntimeParameters()
+runtime.sensing_mode = sl.SENSING_MODE.STANDARD
 
-	# update the points queue
-	pts.appendleft(center)
+# Prepare new image size to retrieve half-resolution images
+image_size = zed.get_camera_information().camera_resolution
 
-	# loop over the set of tracked points
-	for i in range(1, len(pts)):
-		# if either of the tracked points are None, ignore
-		# them
-		if pts[i - 1] is None or pts[i] is None:
-			continue
+# Declare your sl.Mat matrices
+image_zed = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
+lalala = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
 
-		# otherwise, compute the thickness of the line and
-		# draw the connecting lines
-		thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-		cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
+key = ' '
+while key != 113 :
+    err = zed.grab(runtime)
+    if err == sl.ERROR_CODE.SUCCESS :
+        zed.retrieve_image(image_zed, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
+        image_ocv = image_zed.get_data()
 
-	# show the frame to our screen
-	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(1) & 0xFF
+        hsv_min = np.array((low_H, low_S, low_V), np.uint8)
+        hsv_max = np.array((high_H, high_S, high_V), np.uint8)
+        hsv = cv2.cvtColor(image_ocv, cv2.COLOR_BGR2HSV )
+        thresh = cv2.inRange(hsv, hsv_min, hsv_max)
+        
+        moments = cv2.moments(thresh, 1)
+        dM01 = moments['m01']
+        dM10 = moments['m10']
+        dArea = moments['m00']
 
-	# if the 'q' key is pressed, stop the loop
-	if key == ord("q"):
-		break
+        if dArea > 100:
+            x = int(dM10 / dArea)
+            y = int(dM01 / dArea)
+            cv2.circle(lalala, (x, y), 5, color_yellow, 2)
+            cv2.putText(lalala, "%d-%d" % (x,y), (x+10,y-10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, color_yellow, 2)
 
-# if we are not using a video file, stop the camera video stream
-if not args.get("video", False):
-	vs.stop()
+        cv2.imshow(window_capture_name, image_ocv)
+        cv2.imshow(window_detection_name, thresh)
+        cv2.imshow("hahahah", lalala)
 
-# otherwise, release the camera
-else:
-	vs.release()
 
-# close all windows
 cv2.destroyAllWindows()
+zed.close()
+
+print("\nFINISH")
+
