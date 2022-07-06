@@ -10,11 +10,11 @@ class Config:
     #camera settings
     camera_exposure = 26
     camera_gain = 56   
-    camera_gamma = 8  
+    camera_gamma = 54
     camera_sharpness = 8   
     camera_saturation = 8   
     camera_contrast = 3  
-    camera_brightness = 7     
+    camera_brightness = 4     
 
     #camera mask settings
     max_value = 255
