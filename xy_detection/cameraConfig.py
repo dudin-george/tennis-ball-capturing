@@ -1,3 +1,5 @@
+from email.mime import image
+from cv2 import imshow
 import pyzed.sl as sl
 import sys
 from config import Config
@@ -15,11 +17,12 @@ class Camera():
             input_type.set_from_svo_file(sys.argv[1])
     
         init = sl.InitParameters(input_t=input_type)
-        init.camera_resolution = sl.RESOLUTION.VGA
-        init.camera_fps = 100
+        init.camera_resolution = self.config.camera_resolution
+        init.camera_fps = self.config.camera_fps
 
         self.device.open(init)
         self.update_device_config()
+        self.mtx, self.dist, self.upd_camera_matrix, self.rect = self.calibrate()
 
         self.camera_window()
         self.camera_window_mask()
@@ -109,6 +112,94 @@ class Camera():
         cv2.createTrackbar(self.config.high_S_name, self.config.window_capture_name , self.config.high_S, self.config.max_value, on_high_S_thresh_trackbar)
         cv2.createTrackbar(self.config.low_V_name, self.config.window_capture_name , self.config.low_V, self.config.max_value, on_low_V_thresh_trackbar)
         cv2.createTrackbar(self.config.high_V_name, self.config.window_capture_name , self.config.high_V, self.config.max_value, on_high_V_thresh_trackbar) 
+
+
+    def calibrate(self):
+        CHECKERBOARD = (5,8)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        objpoints = []
+        imgpoints = [] 
+        images = []
+        image_size = self.device.get_camera_information().camera_resolution
+        image_zed = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
+
+        objp = np.zeros((1, CHECKERBOARD[0] * CHECKERBOARD[1], 3), np.float32)
+        objp[0,:,:2] = np.mgrid[0:CHECKERBOARD[0], 0:CHECKERBOARD[1]].T.reshape(-1, 2)
+        prev_img_shape = None
+        runtime = sl.RuntimeParameters()
+        runtime.sensing_mode = sl.SENSING_MODE.STANDARD
+
+        print("hahahha")
+        err = self.device.grab(runtime)
+        self.device.retrieve_image(image_zed, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
+        time.sleep(3)
+        
+       
+        for i in range(30):
+            err = self.device.grab(runtime)
+            if not err == sl.ERROR_CODE.SUCCESS :
+                print("ne nashel")
+                
+                break
+           
+            self.device.retrieve_image(image_zed, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
+            a = image_zed.get_data()
+            cv2.imshow('img', a)
+            gray = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
+            ret, corners = cv2.findChessboardCorners(gray, CHECKERBOARD, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            
+            print(1)
+            if ret == True:
+                print(2)
+                objpoints.append(objp)
+                corners2 = cv2.cornerSubPix(gray, corners, (11,11),(-1,-1), criteria)
+                imgpoints.append(corners2)
+
+                
+            cv2.waitKey(10)
+            time.sleep(1)
+
+        time.sleep(10)
+
+
+        h = image_size.height
+        w = image_size.width
+
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, (h, w), None, None)
+        upd_camera_matrix, rect = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+
+
+        return mtx, dist, upd_camera_matrix, rect 
+
+        print("Camera matrix : \n")
+        print(mtx)
+        print("dist : \n")
+        print(dist)
+        print("rvecs : \n")
+        print(rvecs)
+        print("tvecs : \n")
+        print(tvecs)
+        cv2.destroyAllWindows()
+
+
+
+        # h,w = img.shape[:2]
+
+
+        # ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
+
+        # print("Camera matrix : \n")
+        # print(mtx)
+        # print("dist : \n")
+        # print(dist)
+        # print("rvecs : \n")
+        # print(rvecs)
+        # print("tvecs : \n")
+        # print(tvecs)
+        # time.sleep(15)
+
+
+
 
 
 

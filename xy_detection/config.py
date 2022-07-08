@@ -8,23 +8,23 @@ class Config:
     camera_fps = 100
 
     #camera settings
-    camera_exposure = 26
-    camera_gain = 56   
-    camera_gamma = 54
+    camera_exposure = 37
+    camera_gain = 57
+    camera_gamma = 0  
     camera_sharpness = 8   
     camera_saturation = 8   
-    camera_contrast = 3  
+    camera_contrast = 5 
     camera_brightness = 4     
 
     #camera mask settings
     max_value = 255
     max_value_H = 180
-    low_H = 66
-    low_S = 124
-    low_V = 118
-    high_H = 96
+    low_H = 53
+    low_S = 169
+    low_V = 80
+    high_H = 82
     high_S = 255
-    high_V = 210
+    high_V = 183
 
     #names
     window_capture_name = 'Video Capture'

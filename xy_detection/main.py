@@ -18,29 +18,33 @@ runtime.sensing_mode = sl.SENSING_MODE.STANDARD
 image_size = zed.device.get_camera_information().camera_resolution
 
 
-image_zed = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4)
+image_zed = sl.Mat(image_size.width, image_size.height, sl.MAT_TYPE.U8_C4) 
 
 
 S_full = image_size.width * image_size.height
 S_ball = 0.001256
 S_0 = 1.838
-dist0 = 0.75
+dist0 = 1.27
 points = []
 
 
 
 key = ''
-for i in range(50000):
+while True:
 
     err = zed.device.grab(runtime)
     if err == sl.ERROR_CODE.SUCCESS :
         zed.device.retrieve_image(image_zed, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
         image_ocv = image_zed.get_data()
+        undistorted = cv2.undistort(image_ocv, zed.mtx, zed.dist, None, zed.upd_camera_matrix)
+        x, y, w, h = zed.rect
+        undistorted = undistorted[y:y+h, x:x+w]
+
         
 
         hsv_min = np.array((zed.config.low_H, zed.config.low_S, zed.config.low_V), np.uint8)
         hsv_max = np.array((zed.config.high_H, zed.config.high_S, zed.config.high_V), np.uint8)
-        hsv = cv2.cvtColor(image_ocv, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(undistorted, cv2.COLOR_BGR2HSV)
         thresh = cv2.inRange(hsv, hsv_min, hsv_max)
 
 
@@ -64,7 +68,10 @@ for i in range(50000):
 
 
         thresh = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGRA)
-        cv2.imshow(zed.config.window_capture_name, np.concatenate((image_ocv, thresh), axis=1))
+        cv2.imshow(zed.config.window_capture_name, np.concatenate((undistorted, thresh), axis = 1))
+        print()
+        print(undistorted.shape)
+        print()
         key = cv2.waitKey(10)
 
 with open("data.json", "w") as file:
